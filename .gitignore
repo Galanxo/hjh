@@ -1,0 +1,61 @@
+# models.py
+from django.db import models
+
+class User(models.Model):
+    username = models.CharField(max_length=100, unique=True)
+    password = models.CharField(max_length=100)
+    email = models.EmailField(unique=True)
+
+class Photo(models.Model):
+    user = models.ForeignKey(User, on_delete=models.CASCADE)
+    image = models.ImageField()
+    caption = models.CharField(max_length=200, blank=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+class Follow(models.Model):
+    follower = models.ForeignKey(User, on_delete=models.CASCADE, related_name='follower')
+    followed = models.ForeignKey(User, on_delete=models.CASCADE, related_name='followed')
+
+# views.py
+from django.shortcuts import render, redirect
+from .forms import SignupForm, LoginForm, PhotoForm
+from .models import User, Photo, Follow
+
+def signup(request):
+    if request.method == 'POST':
+        form = SignupForm(request.POST)
+        if form.is_valid():
+            form.save()
+            return redirect('login')
+    else:
+        form = SignupForm()
+    return render(request, 'signup.html', {'form': form})
+
+def login(request):
+    if request.method == 'POST':
+        form = LoginForm(request.POST)
+        if form.is_valid():
+            username = form.cleaned_data['username']
+            password = form.cleaned_data['password']
+            user = User.objects.filter(username=username, password=password).first()
+            if user:
+                request.session['user_id'] = user.id
+                return redirect('feed')
+    else:
+        form = LoginForm()
+    return render(request, 'login.html', {'form': form})
+
+def feed(request):
+    user_id = request.session.get('user_id')
+    if not user_id:
+        return redirect('login')
+    user = User.objects.get(id=user_id)
+    followees = Follow.objects.filter(follower=user).values_list('followed', flat=True)
+    photos = Photo.objects.filter(user__in=followees).order_by('-created_at')
+    return render(request, 'feed.html', {'photos': photos})
+
+def upload(request):
+    user_id = request.session.get('user_id')
+    if not user_id:
+        return redirect('login')
+    if request.method == '
